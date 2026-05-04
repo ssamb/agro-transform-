@@ -6,6 +6,7 @@ import MatieresPremieres from './pages/MatieresPremieres'
 import ProduitsFinis from './pages/ProduitsFinis'
 import Recettes from './pages/Recettes'
 import Transformations from './pages/Transformations'
+import DataManagement from './pages/DataManagement'
 
 function App() {
   const token = localStorage.getItem('token')
@@ -28,25 +29,28 @@ function App() {
                 <Link to="/" className="text-xl font-bold text-indigo-600">
                   AgroTransform
                 </Link>
-                {isAuthenticated && (
-                  <div className="hidden md:flex ml-10 space-x-8">
-                    <Link to="/dashboard" className="text-gray-700 hover:text-indigo-600">
-                      Dashboard
-                    </Link>
-                    <Link to="/matieres-premieres" className="text-gray-700 hover:text-indigo-600">
-                      Matières premières
-                    </Link>
-                    <Link to="/produits-finis" className="text-gray-700 hover:text-indigo-600">
-                      Produits finis
-                    </Link>
-                    <Link to="/recettes" className="text-gray-700 hover:text-indigo-600">
-                      Recettes
-                    </Link>
-                    <Link to="/transformations" className="text-gray-700 hover:text-indigo-600">
-                      Transformations
-                    </Link>
-                  </div>
-                )}
+{isAuthenticated && (
+            <div className="hidden md:flex ml-10 space-x-8">
+            <Link to="/dashboard" className="text-gray-700 hover:text-indigo-600">
+              Dashboard
+            </Link>
+            <Link to="/matieres-premieres" className="text-gray-700 hover:text-indigo-600">
+              Matières premières
+            </Link>
+            <Link to="/produits-finis" className="text-gray-700 hover:text-indigo-600">
+              Produits finis
+            </Link>
+            <Link to="/recettes" className="text-gray-700 hover:text-indigo-600">
+              Recettes
+            </Link>
+            <Link to="/transformations" className="text-gray-700 hover:text-indigo-600">
+              Transformations
+            </Link>
+            <Link to="/data" className="text-gray-700 hover:text-indigo-600">
+              Données
+            </Link>
+            </div>
+          )}
               </div>
               <div className="flex items-center space-x-4">
                 {isAuthenticated ? (
@@ -81,11 +85,12 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
             <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} />
-            <Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
-            <Route path="/matieres-premieres" element={isAuthenticated ? <MatieresPremieres /> : <Navigate to="/login" />} />
-            <Route path="/produits-finis" element={isAuthenticated ? <ProduitsFinis /> : <Navigate to="/login" />} />
+<Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
+<Route path="/matieres-premieres" element={isAuthenticated ? <MatieresPremieres /> : <Navigate to="/login" />} />
+<Route path="/produits-finis" element={isAuthenticated ? <ProduitsFinis /> : <Navigate to="/login" />} />
 <Route path="/recettes" element={isAuthenticated ? <Recettes /> : <Navigate to="/login" />} />
 <Route path="/transformations" element={isAuthenticated ? <Transformations /> : <Navigate to="/login" />} />
+<Route path="/data" element={isAuthenticated ? <DataManagement /> : <Navigate to="/login" />} />
           </Routes>
         </main>
       </div>
