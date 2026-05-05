@@ -174,24 +174,26 @@ export const exportData = async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Aucune donnée à exporter' });
       }
       
-      // Headers - exclure id et timestamps
-      const headersToInclude = ['nom', 'categorie', 'unite', 'stock', 'stockMin', 'stockMax', 'rendementPercent', 'dureeTotale', 'pertePercent', 'quantiteMP', 'quantitePF', 'observations', 'statut', 'description'].filter(h => h in data[0]);
+      // Headers pertinents selon l'entité
+      const headersToInclude = ['nom', 'categorie', 'unite', 'stock', 'stockMin', 'stockMax', 'rendementPercent', 'dureeTotale', 'pertePercent', 'quantiteMP', 'quantitePF', 'observations', 'statut', 'description', 'date', 'dateFabrication', 'dateExpiration', 'dureeConservation'].filter(h => h in data[0]);
       const headers = headersToInclude.length > 0 ? headersToInclude : Object.keys(data[0]);
       
-      // Préparer les données
-      const formattedData = data.map(item => {
+      // Préparer les données pour Excel
+      const excelData = data.map((item: any) => {
         const row: any = {};
         headers.forEach(header => {
           let value = item[header];
           
           // Formater les dates
           if (header.toLowerCase().includes('date') || header === 'createdAt' || header === 'updatedAt') {
-            value = formatDate(value);
+            row[header] = formatDate(value);
+            return;
           }
           
-          // Gérer les objets (relations)
+          // Gérer les objets (relations) - EXCLURE les relations complexes
           if (typeof value === 'object' && value !== null) {
-            value = value.nom || value.id || JSON.stringify(value);
+            // On ignore les relations pour l'export Excel
+            return;
           }
           
           row[header] = value;
@@ -200,14 +202,12 @@ export const exportData = async (req: Request, res: Response) => {
       });
       
       // Créer worksheet et workbook
-      const worksheet = XLSX.utils.json_to_sheet(formattedData);
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Données');
       
-      // Générer le fichier Excel en tant que buffer
+      // Générer le fichier Excel
       const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      
-      // Convertir en Buffer Node.js
       const buffer = Buffer.from(wbout as any);
       
       res.setHeader(
