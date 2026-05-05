@@ -169,24 +169,55 @@ export const exportData = async (req: Request, res: Response) => {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
       return res.send(csv);
     } else if (format === 'xlsx') {
-      // Export Excel
+      // Export Excel avec ExcelJS
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Data');
+      workbook.creator = 'AgroTransform';
+      workbook.created = new Date();
+      
+      const worksheet = workbook.addWorksheet('Données');
+      
+      // Couleurs
+      worksheet.properties.defaultRowHeight = 15;
       
       if (data.length > 0) {
-        // Headers
-        const headers = Object.keys(data[0]).filter(key => !key.includes('Id'));
-        worksheet.columns = headers.map(header => ({
-          header: header.charAt(0).toUpperCase() + header.slice(1),
-          key: header,
-          width: 20
-        }));
+        // Headers - exclure id et timestamps
+        const headersToInclude = ['nom', 'categorie', 'unite', 'stock', 'stockMin', 'stockMax', 'rendementPercent', 'dureeTotale', 'pertePercent', 'quantiteMP', 'quantitePF', 'observations', 'statut', 'description'].filter(h => h in data[0]);
+        const headers = headersToInclude.length > 0 ? headersToInclude : Object.keys(data[0]);
         
-        // Rows
+        // En-têtes avec style
+        const headerRow = worksheet.addRow(
+          headers.map(h => h.charAt(0).toUpperCase() + h.slice(1))
+        );
+        headerRow.font = { bold: true };
+        headerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF4F46E5' }
+        };
+        headerRow.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+        
+        // Colonnes
+        headers.forEach(header => {
+          const col = worksheet.getColumn(headers.indexOf(header) + 1);
+          col.width = 20;
+        });
+        
+        // Données
         data.forEach(item => {
-          const row: any = {};
-          headers.forEach(header => {
-            row[header] = item[header];
+          const row = headers.map(header => {
+            let value = item[header];
+            
+            // Formater les dates
+            if (header.toLowerCase().includes('date') || header === 'createdAt' || header === 'updatedAt') {
+              value = formatDate(value);
+            }
+            
+            // Gérer les objets (relations)
+            if (typeof value === 'object' && value !== null) {
+              value = value.nom || value.id || JSON.stringify(value);
+            }
+            
+            return value;
           });
           worksheet.addRow(row);
         });
