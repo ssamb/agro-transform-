@@ -170,48 +170,53 @@ export const exportData = async (req: Request, res: Response) => {
       return res.send(csv);
     } else if (format === 'xlsx') {
       // Export Excel avec SheetJS (xlsx)
-      if (data.length > 0) {
-        // Headers - exclure id et timestamps
-        const headersToInclude = ['nom', 'categorie', 'unite', 'stock', 'stockMin', 'stockMax', 'rendementPercent', 'dureeTotale', 'pertePercent', 'quantiteMP', 'quantitePF', 'observations', 'statut', 'description'].filter(h => h in data[0]);
-        const headers = headersToInclude.length > 0 ? headersToInclude : Object.keys(data[0]);
-        
-        // Préparer les données
-        const formattedData = data.map(item => {
-          const row: any = {};
-          headers.forEach(header => {
-            let value = item[header];
-            
-            // Formater les dates
-            if (header.toLowerCase().includes('date') || header === 'createdAt' || header === 'updatedAt') {
-              value = formatDate(value);
-            }
-            
-            // Gérer les objets (relations)
-            if (typeof value === 'object' && value !== null) {
-              value = value.nom || value.id || JSON.stringify(value);
-            }
-            
-            row[header] = value;
-          });
-          return row;
-        });
-        
-        // Créer worksheet
-        const worksheet = XLSX.utils.json_to_sheet(formattedData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Données');
-        
-        // Générer buffer
-        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-        
-        res.setHeader(
-          'Content-Type',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        );
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
-        res.send(buffer);
-        return;
+      if (data.length === 0) {
+        return res.status(400).json({ error: 'Aucune donnée à exporter' });
       }
+      
+      // Headers - exclure id et timestamps
+      const headersToInclude = ['nom', 'categorie', 'unite', 'stock', 'stockMin', 'stockMax', 'rendementPercent', 'dureeTotale', 'pertePercent', 'quantiteMP', 'quantitePF', 'observations', 'statut', 'description'].filter(h => h in data[0]);
+      const headers = headersToInclude.length > 0 ? headersToInclude : Object.keys(data[0]);
+      
+      // Préparer les données
+      const formattedData = data.map(item => {
+        const row: any = {};
+        headers.forEach(header => {
+          let value = item[header];
+          
+          // Formater les dates
+          if (header.toLowerCase().includes('date') || header === 'createdAt' || header === 'updatedAt') {
+            value = formatDate(value);
+          }
+          
+          // Gérer les objets (relations)
+          if (typeof value === 'object' && value !== null) {
+            value = value.nom || value.id || JSON.stringify(value);
+          }
+          
+          row[header] = value;
+        });
+        return row;
+      });
+      
+      // Créer worksheet et workbook
+      const worksheet = XLSX.utils.json_to_sheet(formattedData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Données');
+      
+      // Générer le fichier Excel en tant que buffer
+      const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      
+      // Convertir en Buffer Node.js
+      const buffer = Buffer.from(wbout as any);
+      
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
+      res.send(buffer);
+      return;
     } else {
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}.json"`);
