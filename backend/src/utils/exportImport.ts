@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from './prisma';
-import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 
 // Types pour l'export
 interface ExportData {
@@ -169,42 +169,16 @@ export const exportData = async (req: Request, res: Response) => {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
       return res.send(csv);
     } else if (format === 'xlsx') {
-      // Export Excel avec ExcelJS
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'AgroTransform';
-      workbook.created = new Date();
-      
-      const worksheet = workbook.addWorksheet('Données');
-      
-      // Couleurs
-      worksheet.properties.defaultRowHeight = 15;
-      
+      // Export Excel avec SheetJS (xlsx)
       if (data.length > 0) {
         // Headers - exclure id et timestamps
         const headersToInclude = ['nom', 'categorie', 'unite', 'stock', 'stockMin', 'stockMax', 'rendementPercent', 'dureeTotale', 'pertePercent', 'quantiteMP', 'quantitePF', 'observations', 'statut', 'description'].filter(h => h in data[0]);
         const headers = headersToInclude.length > 0 ? headersToInclude : Object.keys(data[0]);
         
-        // En-têtes avec style
-        const headerRow = worksheet.addRow(
-          headers.map(h => h.charAt(0).toUpperCase() + h.slice(1))
-        );
-        headerRow.font = { bold: true };
-        headerRow.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FF4F46E5' }
-        };
-        headerRow.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-        
-        // Colonnes
-        headers.forEach(header => {
-          const col = worksheet.getColumn(headers.indexOf(header) + 1);
-          col.width = 20;
-        });
-        
-        // Données
-        data.forEach(item => {
-          const row = headers.map(header => {
+        // Préparer les données
+        const formattedData = data.map(item => {
+          const row: any = {};
+          headers.forEach(header => {
             let value = item[header];
             
             // Formater les dates
@@ -217,20 +191,27 @@ export const exportData = async (req: Request, res: Response) => {
               value = value.nom || value.id || JSON.stringify(value);
             }
             
-            return value;
+            row[header] = value;
           });
-          worksheet.addRow(row);
+          return row;
         });
+        
+        // Créer worksheet
+        const worksheet = XLSX.utils.json_to_sheet(formattedData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Données');
+        
+        // Générer buffer
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+        
+        res.setHeader(
+          'Content-Type',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
+        res.send(buffer);
+        return;
       }
-      
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
-      
-      await workbook.xlsx.write(res);
-      return res.end();
     } else {
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}.json"`);
