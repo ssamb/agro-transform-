@@ -83,7 +83,18 @@ export const getById = async (req: Request, res: Response) => {
 // Créer une transformation (enregistrer résultat)
 export const create = async (req: Request, res: Response) => {
   try {
-    const { quantiteMP, quantitePF, perteReelle, observations, userId, recetteId } = req.body;
+    const { 
+      quantiteMP, 
+      quantitePF, 
+      perteReelle, 
+      pertePercent,
+      observations, 
+      userId, 
+      recetteId,
+      dateFabrication,
+      dateExpiration,
+      dureeConservation 
+    } = req.body;
 
     // Validation
     if (!quantiteMP || !quantitePF || !userId || !recetteId) {
@@ -109,9 +120,19 @@ export const create = async (req: Request, res: Response) => {
 
     // Calculer la perte théorique
     const perteTheorique = quantiteMP * (recette.pertePercent / 100);
+    
+    // Calculer le pourcentage de perte réelle
+    const pertePercentCalc = perteReelle ? ((perteReelle / quantiteMP) * 100) : perteTheorique;
 
     // Calculer le rendement réel
     const rendementReel = ((quantitePF / quantiteMP) * 100).toFixed(2);
+    
+    // Calculer la date d'expiration si durée de conservation fournie
+    let calculatedDateExpiration = dateExpiration ? new Date(dateExpiration) : null;
+    if (dureeConservation && !calculatedDateExpiration) {
+      const dateFab = dateFabrication ? new Date(dateFabrication) : new Date();
+      calculatedDateExpiration = new Date(dateFab.setDate(dateFab.getDate() + parseInt(dureeConservation)));
+    }
 
     // Créer la transformation
     const transformation = await prisma.transformation.create({
@@ -119,9 +140,14 @@ export const create = async (req: Request, res: Response) => {
         quantiteMP: parseFloat(quantiteMP),
         quantitePF: parseFloat(quantitePF),
         perteReelle: perteReelle ? parseFloat(perteReelle) : perteTheorique,
+        pertePercent: pertePercent || pertePercentCalc,
         observations: observations?.trim(),
         userId,
         recetteId,
+        dateFabrication: dateFabrication ? new Date(dateFabrication) : new Date(),
+        dateExpiration: calculatedDateExpiration,
+        dureeConservation: dureeConservation ? parseInt(dureeConservation) : null,
+        statut: 'termine',
       },
       include: {
         recette: {
@@ -149,6 +175,8 @@ export const create = async (req: Request, res: Response) => {
       transformation,
       rendementReel: parseFloat(rendementReel),
       rendementTheorique,
+      pertePercent: pertePercentCalc,
+      dateExpiration: calculatedDateExpiration,
     });
   } catch (error) {
     console.error('Erreur création transformation:', error);
@@ -341,5 +369,152 @@ export const getStatsRendements = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Erreur statistiques rendements:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des statistiques de rendements' });
+  }
+};
+
+// Marquer une transformation comme perdue
+export const markAsLost = async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { perteReelle, observations } = req.body;
+
+const existingTransformation = await prisma.transformation.findUnique({ where: { id } });
+if (!existingTransformation) {
+return res.status(404).json({ error: 'Transformation non trouvée' });
+}
+
+const transformation = await prisma.transformation.update({
+where: { id },
+data: {
+perteReelle: perteReelle || existingTransformation.perteReelle,
+observations: observations ? `${existingTransformation.observations}\n${observations}` : existingTransformation.observations,
+statut: 'perdu',
+},
+      include: {
+        recette: true,
+        user: true,
+      },
+    });
+
+    res.json({
+      message: 'Transformation marquée comme perdue',
+      transformation,
+    });
+  } catch (error) {
+    console.error('Erreur markAsLost:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du statut' });
+  }
+};
+
+// Changer le statut d'une transformation
+export const updateStatut = async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { statut } = req.body;
+
+    if (!['en_cours', 'termine', 'expire', 'perdu'].includes(statut)) {
+      return res.status(400).json({ error: 'Statut invalide' });
+    }
+
+    const transformation = await prisma.transformation.update({
+      where: { id },
+      data: { statut },
+    });
+
+    res.json({
+      message: `Statut mis à jour: ${statut}`,
+      transformation,
+    });
+  } catch (error) {
+    console.error('Erreur updateStatut:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du statut' });
+  }
+};
+
+// Vérifier les transformations expirées
+export const checkExpired = async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    
+    const expired = await prisma.transformation.findMany({
+      where: {
+        dateExpiration: {
+          lte: now,
+        },
+        statut: {
+          not: 'expire',
+        },
+      },
+      include: {
+        recette: true,
+        user: true,
+      },
+    });
+
+    // Mettre à jour le statut de toutes les transformations expirées
+    await prisma.transformation.updateMany({
+      where: {
+        dateExpiration: {
+          lte: now,
+        },
+        statut: {
+          not: 'expire',
+        },
+      },
+      data: {
+        statut: 'expire',
+      },
+    });
+
+    res.json({
+      message: `${expired.length} transformation(s) expirée(s) trouvée(s)`,
+      expired,
+    });
+  } catch (error) {
+    console.error('Erreur checkExpired:', error);
+    res.status(500).json({ error: 'Erreur lors de la vérification des transformations expirées' });
+  }
+};
+
+// Obtenir les transformations avec dates
+export const getByDates = async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate, type } = req.query;
+    
+    const where: any = {};
+    
+    if (type === 'fabrication') {
+      if (startDate) where.dateFabrication = { gte: new Date(startDate as string) };
+      if (endDate) {
+        if (where.dateFabrication) {
+          where.dateFabrication.lte = new Date(endDate as string);
+        } else {
+          where.dateFabrication = { lte: new Date(endDate as string) };
+        }
+      }
+    } else if (type === 'expiration') {
+      if (startDate) where.dateExpiration = { gte: new Date(startDate as string) };
+      if (endDate) {
+        if (where.dateExpiration) {
+          where.dateExpiration.lte = new Date(endDate as string);
+        } else {
+          where.dateExpiration = { lte: new Date(endDate as string) };
+        }
+      }
+    }
+
+    const transformations = await prisma.transformation.findMany({
+      where,
+      include: {
+        recette: true,
+        user: true,
+      },
+      orderBy: { date: 'desc' },
+    });
+
+    res.json(transformations);
+  } catch (error) {
+    console.error('Erreur getByDates:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des transformations par dates' });
   }
 };

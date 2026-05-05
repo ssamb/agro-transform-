@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,20 +7,99 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Utilisateurs avec rôles
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  nom       String
-  role      Role     @default(TRANSFORMATEUR)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  recettes         RecetteTransformation[]
-  transformations  Transformation[]
-  
+  id              String                  @id @default(uuid())
+  email           String                  @unique
+  password        String
+  nom             String
+  role            Role                    @default(TRANSFORMATEUR)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  recettes        RecetteTransformation[]
+  transformations Transformation[]
+
   @@map("users")
+}
+
+model MatierePremiere {
+  id        String                  @id @default(uuid())
+  nom       String
+  categorie String
+  unite     String
+  stock     Float                   @default(0)
+  stockMin  Float                   @default(0)
+  stockMax  Float                   @default(0)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  recettes  RecetteTransformation[]
+
+  @@map("matieres_premieres")
+}
+
+model ProduitFini {
+  id        String                  @id @default(uuid())
+  nom       String
+  categorie String
+  unite     String
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  recettes  RecetteTransformation[]
+
+  @@map("produits_finis")
+}
+
+model RecetteTransformation {
+  id                String           @id @default(uuid())
+  nom               String
+  description       String?
+  rendementPercent  Float
+  dureeTotale       Int?
+  pertePercent      Float            @default(0)
+  userId            String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  matierePremiereId String
+  produitFiniId     String
+  etapes            Etape[]
+  matierePremiere   MatierePremiere  @relation(fields: [matierePremiereId], references: [id])
+  produitFini       ProduitFini      @relation(fields: [produitFiniId], references: [id])
+  user              User             @relation(fields: [userId], references: [id])
+  transformations   Transformation[]
+
+  @@map("recettes_transformation")
+}
+
+model Etape {
+  id          String                @id @default(uuid())
+  numero      Int
+  description String
+  duree       Int?
+  recetteId   String
+  recette     RecetteTransformation @relation(fields: [recetteId], references: [id], onDelete: Cascade)
+
+  @@map("etapes")
+}
+
+model Transformation {
+  id                String                @id @default(uuid())
+  date              DateTime              @default(now())
+  quantiteMP        Float
+  quantitePF        Float
+  perteReelle       Float                 @default(0)
+  observations      String?
+  userId            String
+  recetteId         String
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  dateExpiration    DateTime?
+  dateFabrication   DateTime?
+  dureeConservation Int?
+  pertePercent      Float                 @default(0)
+  statut            String                @default("en_cours")
+  recette           RecetteTransformation @relation(fields: [recetteId], references: [id])
+  user              User                  @relation(fields: [userId], references: [id])
+
+  @@map("transformations")
 }
 
 enum Role {
@@ -31,91 +107,4 @@ enum Role {
   TRANSFORMATEUR
   FORMATEUR
   OBSERVATEUR
-}
-
-// Matières premières (mil, maïs, arachide, etc.)
-model MatierePremiere {
-  id          String  @id @default(uuid())
-  nom         String
-  categorie   String
-  unite       String
-  stock       Float   @default(0)
-  stockMin    Float   @default(0)
-  stockMax    Float   @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  recettes     RecetteTransformation[]
-  
-  @@map("matieres_premieres")
-}
-
-// Produits finis (couscous, farine, huile, etc.)
-model ProduitFini {
-  id        String  @id @default(uuid())
-  nom       String
-  categorie String
-  unite     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  recettes RecetteTransformation[]
-  
-  @@map("produits_finis")
-}
-
-// Recettes de transformation
-model RecetteTransformation {
-  id String @id @default(uuid())
-  nom String
-  description String?
-  rendementPercent Float
-  dureeTotale Int? // en minutes
-  pertePercent Float @default(0)
-  userId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  matierePremiereId String
-  produitFiniId String
-
-  matierePremiere MatierePremiere @relation(fields: [matierePremiereId], references: [id])
-  produitFini ProduitFini @relation(fields: [produitFiniId], references: [id])
-  user User @relation(fields: [userId], references: [id])
-  etapes Etape[]
-  transformations Transformation[]
-
-  @@map("recettes_transformation")
-}
-
-// Étapes de transformation
-model Etape {
-  id          String  @id @default(uuid())
-  numero      Int
-  description String
-  duree       Int? // en minutes
-  recetteId   String
-  
-  recette RecetteTransformation @relation(fields: [recetteId], references: [id], onDelete: Cascade)
-  
-  @@map("etapes")
-}
-
-// Historique des transformations
-model Transformation {
-  id           String   @id @default(uuid())
-  date         DateTime @default(now())
-  quantiteMP   Float // Quantité de matière première utilisée
-  quantitePF   Float // Quantité de produit fini obtenue
-  perteReelle  Float   @default(0)
-  observations String?
-  userId       String
-  recetteId    String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
-  user    User                @relation(fields: [userId], references: [id])
-  recette RecetteTransformation @relation(fields: [recetteId], references: [id])
-  
-  @@map("transformations")
 }

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from './prisma';
+import ExcelJS from 'exceljs';
 
 // Types pour l'export
 interface ExportData {
@@ -120,14 +121,49 @@ export const exportData = async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Entity type non supporté' });
     }
     
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `${entityType}-${dateStr}`;
+    
     if (format === 'csv') {
       const csv = parseToCSV(data);
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="${entityType}-${new Date().toISOString().split('T')[0]}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
       return res.send(csv);
+    } else if (format === 'xlsx') {
+      // Export Excel
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Data');
+      
+      if (data.length > 0) {
+        // Headers
+        const headers = Object.keys(data[0]).filter(key => !key.includes('Id'));
+        worksheet.columns = headers.map(header => ({
+          header: header.charAt(0).toUpperCase() + header.slice(1),
+          key: header,
+          width: 20
+        }));
+        
+        // Rows
+        data.forEach(item => {
+          const row: any = {};
+          headers.forEach(header => {
+            row[header] = item[header];
+          });
+          worksheet.addRow(row);
+        });
+      }
+      
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
+      
+      await workbook.xlsx.write(res);
+      return res.end();
     } else {
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="${entityType}-${new Date().toISOString().split('T')[0]}.json"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.json"`);
       return res.json(data);
     }
   } catch (error) {
