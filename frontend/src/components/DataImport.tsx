@@ -48,20 +48,20 @@ export default function DataImport({ entity, onSuccess }: DataImportProps) {
       let data: any[] = [];
 
       if (isCsv) {
-        // Parser CSV
+        // Parser CSV (point-virgule)
         const lines = text.trim().split('\n');
         if (lines.length > 1) {
-          const headers = lines[0].split(',').map((h: string) => h.trim().replace(/^"|"$/g, ''));
+          const headers = lines[0].split(';').map((h: string) => h.trim().replace(/^"|"$/g, ''));
           data = lines.slice(1).map((line) => {
-            const values = line.split(/,(?=(?:([^"]*"){2})*[^"]*$)/);
+            const values = line.split(/;(?=(?:([^"]*"){2})*[^"]*$)/);
             const obj: any = {};
             headers.forEach((header: string, index: number) => {
               let value = values[index]?.trim() || '';
               value = value.replace(/^"|"$/g, '').replace(/""/g, '"');
               if (value === 'true') obj[header] = true;
               else if (value === 'false') obj[header] = false;
-              else if (/^\d+$/.test(value)) obj[header] = parseInt(value, 10);
-              else if (/^\d+\.\d+$/.test(value)) obj[header] = parseFloat(value);
+              else if (/^[-]?\d+$/.test(value)) obj[header] = parseInt(value, 10);
+              else if (/^[-]?\d+\.\d+$/.test(value)) obj[header] = parseFloat(value);
               else obj[header] = value;
             });
             return obj;
@@ -108,17 +108,17 @@ export default function DataImport({ entity, onSuccess }: DataImportProps) {
       if (isCsv) {
         const lines = text.trim().split('\n');
         if (lines.length > 1) {
-          const headers = lines[0].split(',').map((h: string) => h.trim().replace(/^"|"$/g, ''));
+          const headers = lines[0].split(';').map((h: string) => h.trim().replace(/^"|"$/g, ''));
           data = lines.slice(1).map((line) => {
-            const values = line.split(/,(?=(?:([^"]*"){2})*[^"]*$)/);
+            const values = line.split(/;(?=(?:([^"]*"){2})*[^"]*$)/);
             const obj: any = {};
             headers.forEach((header: string, index: number) => {
               let value = values[index]?.trim() || '';
               value = value.replace(/^"|"$/g, '').replace(/""/g, '"');
               if (value === 'true') obj[header] = true;
               else if (value === 'false') obj[header] = false;
-              else if (/^\d+$/.test(value)) obj[header] = parseInt(value, 10);
-              else if (/^\d+\.\d+$/.test(value)) obj[header] = parseFloat(value);
+              else if (/^[-]?\d+$/.test(value)) obj[header] = parseInt(value, 10);
+              else if (/^[-]?\d+\.\d+$/.test(value)) obj[header] = parseFloat(value);
               else obj[header] = value;
             });
             return obj;

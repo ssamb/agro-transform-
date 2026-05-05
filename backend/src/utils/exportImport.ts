@@ -9,23 +9,56 @@ interface ExportData {
   data: any[];
 }
 
+// Formater une date
+const formatDate = (value: any): string => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return String(value);
+  
+  // Format: YYYY-MM-DD HH:MM:SS
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
 // Parser CSV simple
 const parseToCSV = (data: any[]): string => {
   if (data.length === 0) return '';
   
-  const headers = Object.keys(data[0]);
+  // Headers sans id et timestamps
+  const headersToInclude = ['nom', 'categorie', 'unite', 'stock', 'stockMin', 'stockMax', 'rendementPercent', 'dureeTotale', 'pertePercent', 'quantiteMP', 'quantitePF', 'observations', 'statut'].filter(h => h in data[0]);
+  const headers = headersToInclude.length > 0 ? headersToInclude : Object.keys(data[0]);
+  
   const rows = data.map(item => 
     headers.map(header => {
-      const value = item[header];
+      let value = item[header];
+      
+      // Formater les dates
+      if (header.toLowerCase().includes('date') || header === 'createdAt' || header === 'updatedAt') {
+        value = formatDate(value);
+      }
+      
+      // Gérer les objets (relations)
+      if (typeof value === 'object' && value !== null) {
+        value = value.nom || value.id || JSON.stringify(value);
+      }
+      
+      const strValue = String(value ?? '');
+      
       // Échapper les guillemets et entourer de guillemets si nécessaire
-      const escaped = String(value).replace(/"/g, '""');
-      return escaped.includes(',') || escaped.includes('\n') || escaped.includes('"')
+      const escaped = strValue.replace(/"/g, '""');
+      return escaped.includes(',') || escaped.includes('\n') || escaped.includes('"') || escaped.includes(';')
         ? `"${escaped}"`
         : escaped;
-    }).join(',')
+    }).join(';') // Séparateur point-virgule pour Excel
   );
   
-  return [headers.join(','), ...rows].join('\n');
+  return [headers.join(';'), ...rows].join('\n');
 };
 
 // Parser CSV vers objet
@@ -33,10 +66,12 @@ const parseFromCSV = (csv: string, entityType: string): any[] => {
   const lines = csv.trim().split('\n');
   if (lines.length < 2) return [];
   
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  // Headers en point-virgule
+  const headers = lines[0].split(';').map(h => h.trim().replace(/^"|"$/g, ''));
   
   return lines.slice(1).map(line => {
-    const values = line.split(/,(?=(?:([^"]*"){2})*[^"]*$)/); // Split en respectant les guillemets
+    // Split en respectant les guillemets
+    const values = line.split(/;(?=(?:([^"]*"){2})*[^"]*$)/);
     const obj: any = {};
     
     headers.forEach((header, index) => {
@@ -44,11 +79,15 @@ const parseFromCSV = (csv: string, entityType: string): any[] => {
       // Retirer les guillemets
       value = value.replace(/^"|"$/g, '').replace(/""/g, '"');
       
+      // Format date YYYY-MM-DD ou YYYY-MM-DD HH:MM:SS
+      if (header.toLowerCase().includes('date') && value.match(/^\d{4}-\d{2}-\d{2}/)) {
+        obj[header] = value;
+      }
       // Conversion de type
-      if (value === 'true') obj[header] = true;
+      else if (value === 'true') obj[header] = true;
       else if (value === 'false') obj[header] = false;
-      else if (/^\d+$/.test(value)) obj[header] = parseInt(value, 10);
-      else if (/^\d+\.\d+$/.test(value)) obj[header] = parseFloat(value);
+      else if (/^[-]?\d+$/.test(value)) obj[header] = parseInt(value, 10);
+      else if (/^[-]?\d+\.\d+$/.test(value)) obj[header] = parseFloat(value);
       else obj[header] = value;
     });
     
@@ -126,7 +165,7 @@ export const exportData = async (req: Request, res: Response) => {
     
     if (format === 'csv') {
       const csv = parseToCSV(data);
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
       return res.send(csv);
     } else if (format === 'xlsx') {
